@@ -21,10 +21,7 @@ import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.content.Intent;
-import android.media.AudioFormat;
-import android.media.AudioRecord;
 import android.os.Bundle;
-import android.os.Environment;
 import android.os.Handler;
 import android.os.Message;
 import android.support.annotation.Nullable;
@@ -44,26 +41,24 @@ import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
+
 import com.example.android.common.logger.Log;
 
+//
 import android.media.AudioFormat;
 import android.media.AudioManager;
 import android.media.AudioRecord;
 import android.media.AudioTrack;
 import android.media.MediaRecorder;
-import android.os.Bundle;
 import android.os.Environment;
 //import android.util.Log;
-import android.widget.Button;
-
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.RandomAccessFile;
-
-import java.io.IOException;
+//
 
 /**
  * This fragment controls Bluetooth to communicate with other devices.
@@ -118,6 +113,7 @@ public class BluetoothChatFragment extends Fragment {
     private Thread recordingThread = null;
     private boolean isRecording = false;
     private int bufferSize = 0;
+    private AudioTrack at;
     /**
      * END RecordAudio
      */
@@ -136,23 +132,25 @@ public class BluetoothChatFragment extends Fragment {
             activity.finish();
         }
 
-        /**
-         * START RecordAudio
-         */
-        //setButtonHandlers();
-        //enableButtons(false);
 
-       /* bufferSize = AudioRecord.getMinBufferSize(RECORDER_SAMPLERATE,
-                RECORDER_CHANNELS, RECORDER_AUDIO_ENCODING);*/
-        /**
-         * END RecordAudio
-         */
+        //* START RecordAudio
+        //
+        //setButtonHandlers(getView());
+        //enableButtons(false, getView());
+
+        bufferSize = AudioRecord.getMinBufferSize(RECORDER_SAMPLERATE,
+                RECORDER_CHANNELS, RECORDER_AUDIO_ENCODING);
+        at = new AudioTrack(AudioManager.STREAM_MUSIC, 44100, AudioFormat.CHANNEL_IN_STEREO,
+                AudioFormat.ENCODING_PCM_16BIT, bufferSize, AudioTrack.MODE_STREAM);
+        at.play();
+        //* END RecordAudio
+
+
     }
 
     private void setButtonHandlers(View view) {
         ((Button) view.findViewById(R.id.btnStart)).setOnClickListener(btnClick);
         ((Button) view.findViewById(R.id.btnStop)).setOnClickListener(btnClick);
-       // ((Button) findViewById(R.id.btnPlayBuffer)).setOnClickListener(btnClick);
     }
 
     private void enableButton(int id, boolean isEnable, View view) {
@@ -168,12 +166,12 @@ public class BluetoothChatFragment extends Fragment {
         public void onClick(View v) {
             switch (v.getId()) {
                 case R.id.btnStart: {
-                    enableButtons(true, v);
+                    //enableButtons(true, v);
                     startRecording();
                     break;
                 }
                 case R.id.btnStop: {
-                    enableButtons(false, v);
+                    //enableButtons(false, v);
                     stopRecording();
                     break;
                 }
@@ -269,6 +267,27 @@ public class BluetoothChatFragment extends Fragment {
         }*/
     }
 
+    private void sendBytes(byte[] message) {
+        // Check that we're actually connected before trying anything
+
+        /*if (mChatService.getState() != BluetoothChatService.STATE_CONNECTED) {
+            Toast.makeText(getActivity(), R.string.not_connected, Toast.LENGTH_SHORT).show();
+            return;
+        }*/
+
+        // Check that there's actually something to send
+
+        if (message.length > 0) {
+            // Get the message bytes and tell the BluetoothChatService to write
+            //byte[] send = message.getBytes();
+            mChatService.write(message);
+
+            // Reset out string buffer to zero and clear the edit text field
+            //mOutStringBuffer.setLength(0);
+            //mOutEditText.setText(mOutStringBuffer);
+        }
+    }
+
     @Override
     public void onStart() {
         super.onStart();
@@ -319,15 +338,13 @@ public class BluetoothChatFragment extends Fragment {
         mOutEditText = (EditText) view.findViewById(R.id.edit_text_out);
         mSendButton = (Button) view.findViewById(R.id.button_send);
         setButtonHandlers(view);
-        bufferSize = AudioRecord.getMinBufferSize(RECORDER_SAMPLERATE,
-                RECORDER_CHANNELS, RECORDER_AUDIO_ENCODING);
     }
 
     /**
      * Set up the UI and background operations for chat.
      */
     private void setupChat() {
-        com.example.android.common.logger.Log.d(TAG, "setupChat()");
+        Log.d(TAG, "setupChat()");
 
         // Initialize the array adapter for the conversation thread
         mConversationArrayAdapter = new ArrayAdapter<String>(getActivity(), R.layout.message);
@@ -390,27 +407,6 @@ public class BluetoothChatFragment extends Fragment {
             // Reset out string buffer to zero and clear the edit text field
             mOutStringBuffer.setLength(0);
             mOutEditText.setText(mOutStringBuffer);
-        }
-    }
-
-    private void sendBytes(byte[] message) {
-        // Check that we're actually connected before trying anything
-
-        /*if (mChatService.getState() != BluetoothChatService.STATE_CONNECTED) {
-            Toast.makeText(getActivity(), R.string.not_connected, Toast.LENGTH_SHORT).show();
-            return;
-        }*/
-
-        // Check that there's actually something to send
-
-        if (message.length > 0) {
-            // Get the message bytes and tell the BluetoothChatService to write
-            //byte[] send = message.getBytes();
-            mChatService.write(message);
-
-            // Reset out string buffer to zero and clear the edit text field
-            //mOutStringBuffer.setLength(0);
-            //mOutEditText.setText(mOutStringBuffer);
         }
     }
 
@@ -490,13 +486,22 @@ public class BluetoothChatFragment extends Fragment {
                     byte[] writeBuf = (byte[]) msg.obj;
                     // construct a string from the buffer
                     String writeMessage = new String(writeBuf);
-                    mConversationArrayAdapter.add("Me:  " + writeMessage);
+                    if (!isRecording) {
+                        mConversationArrayAdapter.add("Me:  " + writeMessage);
+                    }
                     break;
                 case Constants.MESSAGE_READ:
                     byte[] readBuf = (byte[]) msg.obj;
                     // construct a string from the valid bytes in the buffer
-                    String readMessage = new String(readBuf, 0, msg.arg1);
-                    mConversationArrayAdapter.add(mConnectedDeviceName + ":  " + readMessage);
+                    //String readMessage = new String(readBuf, 0, msg.arg1);
+                    //mConversationArrayAdapter.add(mConnectedDeviceName + ":  " + readMessage);
+                    //
+                    try {
+                        PlayAudioFromByteBuffer(readBuf, bufferSize);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                    //
                     break;
                 case Constants.MESSAGE_DEVICE_NAME:
                     // save the connected device's name
@@ -515,6 +520,62 @@ public class BluetoothChatFragment extends Fragment {
             }
         }
     };
+
+    private void PlayAudioFromByteBuffer(byte[] byteData, int MinBufferSize) throws IOException {
+        // We keep temporarily filePath globally as we have only two sample sounds now..
+
+//        if (filePath == null)
+//            return;
+
+        /*AudioTrack at = new AudioTrack(AudioManager.STREAM_MUSIC, 44100, AudioFormat.CHANNEL_IN_STEREO,
+                AudioFormat.ENCODING_PCM_16BIT, MinBufferSize, AudioTrack.MODE_STREAM);*/
+
+
+        if (at == null) {
+            Log.d("TCAudio", "audio track is not initialised ");
+            return;
+        }
+
+        //int bufferCount = 192 * 1024; // 192 kb
+
+        /*byte[] byteData = null;
+        File file = null;
+        file = new File(filePath);
+
+        FileInputStream in = null;
+        try {
+            in = new FileInputStream(file);
+
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        }*/
+        //int firstByte = 44;
+        //int bytesread = 0, ret = 0;
+        //int size = (int) in.getChannel().size();//(int) file.length();
+        // int byteCount = bufferCount;
+
+        //byteData = new byte[size];
+        //at.play();
+        //ret = in.read(byteData, firstByte, byteData.length-firstByte);
+        at.write(byteData, 0, byteData.length);
+
+        /*if (byteCount > size) {
+            byteCount = size;
+        }
+        byteData = new byte[byteCount];
+        at.play();
+        while (firstByte < size) {
+            ret = in.read(byteData, firstByte, byteCount);
+            at.write(byteData, 0, ret);
+            firstByte =+ byteCount;
+        }*/
+
+        //in.close();
+        //at.stop();
+        //at.release();
+
+
+    }
 
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
         switch (requestCode) {
@@ -537,7 +598,7 @@ public class BluetoothChatFragment extends Fragment {
                     setupChat();
                 } else {
                     // User did not enable Bluetooth or an error occurred
-                    com.example.android.common.logger.Log.d(TAG, "BT not enabled");
+                    Log.d(TAG, "BT not enabled");
                     Toast.makeText(getActivity(), R.string.bt_not_enabled_leaving,
                             Toast.LENGTH_SHORT).show();
                     getActivity().finish();
