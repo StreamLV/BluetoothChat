@@ -35,8 +35,10 @@ import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.inputmethod.EditorInfo;
+import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.TextView;
@@ -76,6 +78,13 @@ public class BluetoothChatFragment extends Fragment {
     private ListView mConversationView;
     private EditText mOutEditText;
     private Button mSendButton;
+    private Button btnStreamStart;
+    private Button btnStreamStop;
+    private Button btnLstStart;
+    private Button btnLstStop;
+    private Button btnPlayFile;
+    private CheckBox cbWriteToFile;
+
 
     /**
      * Name of the connected device
@@ -111,7 +120,8 @@ public class BluetoothChatFragment extends Fragment {
     private static final int RECORDER_AUDIO_ENCODING = AudioFormat.ENCODING_PCM_16BIT;
     private AudioRecord recorder = null;
     private Thread recordingThread = null;
-    private boolean isRecording = false;
+    private boolean isStreaming = false;
+    private boolean isListening = false;
     private int bufferSize = 0;
     private AudioTrack at;
     /**
@@ -124,7 +134,6 @@ public class BluetoothChatFragment extends Fragment {
         setHasOptionsMenu(true);
         // Get local Bluetooth adapter
         mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
-
         // If the adapter is null, then Bluetooth is not supported
         if (mBluetoothAdapter == null) {
             FragmentActivity activity = getActivity();
@@ -151,28 +160,62 @@ public class BluetoothChatFragment extends Fragment {
     private void setButtonHandlers(View view) {
         ((Button) view.findViewById(R.id.btnStart)).setOnClickListener(btnClick);
         ((Button) view.findViewById(R.id.btnStop)).setOnClickListener(btnClick);
+        ((Button) view.findViewById(R.id.btnLstStart)).setOnClickListener(btnClick);
+        ((Button) view.findViewById(R.id.btnLstStop)).setOnClickListener(btnClick);
+        ((Button) view.findViewById(R.id.btnPlayFile)).setOnClickListener(btnClick);
     }
 
     private void enableButton(int id, boolean isEnable, View view) {
         ((Button) view.findViewById(id)).setEnabled(isEnable);
     }
 
-    private void enableButtons(boolean isRecording, View view) {
-        enableButton(R.id.btnStart, !isRecording, view);
-        enableButton(R.id.btnStop, isRecording, view);
+    private void enableButtons(boolean isStreaming, boolean isListening, View view) {
+        //enableButton(R.id.btnStart, !isStreaming, view);
+        //enableButton(R.id.btnStop, isStreaming, view);
+        btnStreamStart.setEnabled(!isStreaming);
+        btnStreamStop.setEnabled(isStreaming);
+        btnLstStart.setEnabled(!isListening);
+        btnLstStop.setEnabled(isListening);
     }
 
     private View.OnClickListener btnClick = new View.OnClickListener() {
         public void onClick(View v) {
             switch (v.getId()) {
                 case R.id.btnStart: {
-                    //enableButtons(true, v);
-                    startRecording();
+                    startStreaming();
+                    enableButtons(isStreaming, isListening, v);
                     break;
                 }
                 case R.id.btnStop: {
+                    stopStreaming();
+                    enableButtons(isStreaming, isListening, v);
+                    break;
+                }
+                case R.id.btnLstStart: {
                     //enableButtons(false, v);
-                    stopRecording();
+                    isListening = true;
+                    enableButtons(isStreaming, isListening, v);
+                    //cbWriteToFile.setEnabled(isListening);
+                    break;
+                }
+                case R.id.btnLstStop: {
+                    //enableButtons(false, v);
+                    isListening = false;
+                    enableButtons(isStreaming, isListening, v);
+                    //cbWriteToFile.setEnabled(isListening);
+                    break;
+                }
+                case R.id.btnPlayFile: {
+                    String filePathWave =  Environment.getExternalStorageDirectory()+"/Download/voice8K16bitmono.raw";
+                    try {
+                        PlayAudioFileViaAudioTrack(filePathWave, bufferSize);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                        Toast.makeText(getActivity(), e.getMessage(),
+                                Toast.LENGTH_SHORT).show();
+                    }
+                    //enableButtons(false);
+                    //stopRecording();
                     break;
                 }
                 /*case R.id.btnPlayBuffer: {
@@ -190,18 +233,18 @@ public class BluetoothChatFragment extends Fragment {
         }
     };
 
-    private void startRecording() {
+    private void startStreaming() {
 
         recorder = new AudioRecord(MediaRecorder.AudioSource.MIC,
                 RECORDER_SAMPLERATE, RECORDER_CHANNELS,
                 RECORDER_AUDIO_ENCODING, bufferSize);//BufferElements2Rec * BytesPerElement);
 
         recorder.startRecording();
-        isRecording = true;
+        isStreaming = true;
 
         recordingThread = new Thread(new Runnable() {
             public void run() {
-                writeAudioDataToFile();
+                streamAudioDataViaBluetooth();
                 //writeAudioDataToWaveFile();
             }
         }, "AudioRecorder Thread");
@@ -209,10 +252,10 @@ public class BluetoothChatFragment extends Fragment {
     }
 
 
-    private void stopRecording() {
+    private void stopStreaming() {
         // stops the recording activity
         if (null != recorder) {
-            isRecording = false;
+            isStreaming = false;
             recorder.stop();
             recorder.release();
             recorder = null;
@@ -220,26 +263,31 @@ public class BluetoothChatFragment extends Fragment {
         }
     }
 
-    private void writeAudioDataToFile() {
+    private void streamAudioDataViaBluetooth() {
         // Write the output audio in byte
 
-        String filePath =  Environment.getExternalStorageDirectory()+"/Download/voice8K16bitmono.raw";
-        String filePathWave =  Environment.getExternalStorageDirectory()+"/Download/voice8K16bitmono.wav";
+        /*String filePath =  Environment.getExternalStorageDirectory()+"/Download/voice8K16bitmono.raw";
+        String filePathWave =  Environment.getExternalStorageDirectory()+"/Download/voice8K16bitmono.wav";*/
         //short sData[] = new short[BufferElements2Rec];
 
         byte bdata[] = new byte[bufferSize];
 
-        FileOutputStream os = null;
+        /*FileOutputStream os = null;
         try {
             os = new FileOutputStream(filePath);
         } catch (FileNotFoundException e) {
             e.printStackTrace();
-        }
+        }*/
         int read = 0;
-        while (isRecording) {
+        while (isStreaming) {
             // gets the voice output from microphone to byte format
             read = recorder.read(bdata, 0, bufferSize);
-            sendBytes(bdata);
+            //sendBytes(bdata);
+            if (bdata.length > 0) {
+                // Get the message bytes and tell the BluetoothChatService to write
+                //byte[] send = message.getBytes();
+                mChatService.write(bdata);
+            }
             //if(AudioRecord.ERROR_INVALID_OPERATION != read){
             /*try {
                 os.write(bdata);
@@ -267,26 +315,6 @@ public class BluetoothChatFragment extends Fragment {
         }*/
     }
 
-    private void sendBytes(byte[] message) {
-        // Check that we're actually connected before trying anything
-
-        /*if (mChatService.getState() != BluetoothChatService.STATE_CONNECTED) {
-            Toast.makeText(getActivity(), R.string.not_connected, Toast.LENGTH_SHORT).show();
-            return;
-        }*/
-
-        // Check that there's actually something to send
-
-        if (message.length > 0) {
-            // Get the message bytes and tell the BluetoothChatService to write
-            //byte[] send = message.getBytes();
-            mChatService.write(message);
-
-            // Reset out string buffer to zero and clear the edit text field
-            //mOutStringBuffer.setLength(0);
-            //mOutEditText.setText(mOutStringBuffer);
-        }
-    }
 
     @Override
     public void onStart() {
@@ -334,10 +362,16 @@ public class BluetoothChatFragment extends Fragment {
 
     @Override
     public void onViewCreated(View view, @Nullable Bundle savedInstanceState) {
-        mConversationView = (ListView) view.findViewById(R.id.in);
-        mOutEditText = (EditText) view.findViewById(R.id.edit_text_out);
-        mSendButton = (Button) view.findViewById(R.id.button_send);
+        //mConversationView = (ListView) view.findViewById(R.id.in);
+        //mOutEditText = (EditText) view.findViewById(R.id.edit_text_out);
+        //mSendButton = (Button) view.findViewById(R.id.button_send);
+        btnStreamStart = (Button) view.findViewById(R.id.btnStart);
+        btnStreamStop  = (Button) view.findViewById(R.id.btnStop);
+        btnLstStart    = (Button) view.findViewById(R.id.btnLstStart);
+        btnLstStop     = (Button) view.findViewById(R.id.btnLstStop);
+        cbWriteToFile  = (CheckBox) view.findViewById(R.id.cbWriteToFile);
         setButtonHandlers(view);
+        enableButtons(isStreaming, isListening, view);
     }
 
     /**
@@ -347,15 +381,15 @@ public class BluetoothChatFragment extends Fragment {
         Log.d(TAG, "setupChat()");
 
         // Initialize the array adapter for the conversation thread
-        mConversationArrayAdapter = new ArrayAdapter<String>(getActivity(), R.layout.message);
+       /* mConversationArrayAdapter = new ArrayAdapter<String>(getActivity(), R.layout.message);
 
         mConversationView.setAdapter(mConversationArrayAdapter);
 
         // Initialize the compose field with a listener for the return key
-        mOutEditText.setOnEditorActionListener(mWriteListener);
+        mOutEditText.setOnEditorActionListener(mWriteListener);*/
 
         // Initialize the send button with a listener that for click events
-        mSendButton.setOnClickListener(new View.OnClickListener() {
+        /*mSendButton.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 // Send a message using content of the edit text widget
                 View view = getView();
@@ -365,7 +399,7 @@ public class BluetoothChatFragment extends Fragment {
                     sendMessage(message);
                 }
             }
-        });
+        });*/
 
         // Initialize the BluetoothChatService to perform bluetooth connections
         mChatService = new BluetoothChatService(getActivity(), mHandler);
@@ -486,21 +520,27 @@ public class BluetoothChatFragment extends Fragment {
                     byte[] writeBuf = (byte[]) msg.obj;
                     // construct a string from the buffer
                     String writeMessage = new String(writeBuf);
-                    if (!isRecording) {
+                    if (!isStreaming) {
                         mConversationArrayAdapter.add("Me:  " + writeMessage);
                     }
                     break;
                 case Constants.MESSAGE_READ:
+                    if (!isListening) {
+                        break;
+                    }
                     byte[] readBuf = (byte[]) msg.obj;
                     // construct a string from the valid bytes in the buffer
                     //String readMessage = new String(readBuf, 0, msg.arg1);
                     //mConversationArrayAdapter.add(mConnectedDeviceName + ":  " + readMessage);
                     //
-                    try {
-                        PlayAudioFromByteBuffer(readBuf, bufferSize);
-                    } catch (IOException e) {
+                    if (cbWriteToFile.isChecked()) {
+                        SaveBluetoothBytesToFile(readBuf, bufferSize);
+                    }else try {
+                            PlayAudioFromByteBuffer(readBuf, bufferSize);
+                        } catch (IOException e) {
                         e.printStackTrace();
                     }
+
                     //
                     break;
                 case Constants.MESSAGE_DEVICE_NAME:
@@ -520,6 +560,25 @@ public class BluetoothChatFragment extends Fragment {
             }
         }
     };
+
+    private void SaveBluetoothBytesToFile(byte[] byteData, int size) {
+
+        String filePath =  Environment.getExternalStorageDirectory()+"/Download/voice8K16bitmono.raw";
+
+        //byte bdata[] = new byte[bufferSize];
+
+        FileOutputStream os = null;
+        try {
+            os = new FileOutputStream(filePath);
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        }
+        try {
+                os.write(byteData);
+        } catch (IOException e) {
+                e.printStackTrace();
+          }
+    }
 
     private void PlayAudioFromByteBuffer(byte[] byteData, int MinBufferSize) throws IOException {
         // We keep temporarily filePath globally as we have only two sample sounds now..
@@ -573,6 +632,64 @@ public class BluetoothChatFragment extends Fragment {
         //in.close();
         //at.stop();
         //at.release();
+
+
+    }
+
+    private void PlayAudioFileViaAudioTrack(String filePath, int MinBufferSize) throws IOException {
+        // We keep temporarily filePath globally as we have only two sample sounds now..
+
+//        if (filePath == null)
+//            return;
+
+        AudioTrack at = new AudioTrack(AudioManager.STREAM_MUSIC, 44100, AudioFormat.CHANNEL_IN_STEREO,
+                AudioFormat.ENCODING_PCM_16BIT, MinBufferSize, AudioTrack.MODE_STREAM);
+
+
+        if (at == null) {
+            Log.d("TCAudio", "audio track is not initialised ");
+            return;
+        }
+
+        int count = 512 * 1024; // 512 kb
+//Reading the file..
+        byte[] byteData = null;
+        File file = null;
+        //try {
+            file = new File(filePath);
+        /*} catch (IOException e) {
+            e.printStackTrace();
+            //Toast.makeText(BluetoothChatFragment.this, "file not founf", Toast.LENGTH_SHORT).show();
+            return;
+        }*/
+
+
+
+        byteData = new byte[(int) count];
+        FileInputStream in = null;
+        try {
+            in = new FileInputStream(file);
+
+        } catch (FileNotFoundException e) {
+// TODO Auto-generated catch block
+            e.printStackTrace();
+            return;
+        }
+        int firstByte = 0;//44;
+        int bytesread = 0, ret = 0;
+        int size = (int) file.length()-firstByte;
+        at.play();
+        //while (bytesread < size) {
+        //ret = in.read(byteData, firstByte, count-firstByte);
+        ret = in.read(byteData, firstByte, byteData.length-firstByte);
+        at.write(byteData,0, ret);
+        //if (ret != -1) {
+        // Write the byte array to the track
+        //at.write(byteData,0, ret);
+        //bytesread += ret;
+        //} else break;
+        //} in.close(); at.stop(); at.release();
+        //
 
 
     }

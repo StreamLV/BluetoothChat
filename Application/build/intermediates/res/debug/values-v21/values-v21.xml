@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- From: file:/F:/Bases/bt_sap_dev/BluetoothChat/Application/build/intermediates/exploded-aar/com.android.support/appcompat-v7/22.2.1/res/values-v21/values-v21.xml -->
+    <!-- From: file:/home/vitaliy/AndroidStudioProjects/BluetoothChat/Application/build/intermediates/exploded-aar/com.android.support/appcompat-v7/22.2.1/res/values-v21/values-v21.xml -->
     <eat-comment/>
     <style name="Base.TextAppearance.AppCompat" parent="android:TextAppearance.Material"/>
     <style name="Base.TextAppearance.AppCompat.Body1" parent="android:TextAppearance.Material.Body1"/>
@@ -255,7 +255,7 @@
         <item name="android:colorControlHighlight">?attr/colorControlHighlight</item>
         <item name="android:colorButtonNormal">?attr/colorButtonNormal</item>
     </style>
-    <!-- From: file:/F:/Bases/bt_sap_dev/BluetoothChat/Application/src/main/res/values-v21/base-template-styles.xml -->
+    <!-- From: file:/home/vitaliy/AndroidStudioProjects/BluetoothChat/Application/src/main/res/values-v21/base-template-styles.xml -->
     <eat-comment/>
     <style name="Theme.Base" parent="android:Theme.Material.Light">
     </style>
